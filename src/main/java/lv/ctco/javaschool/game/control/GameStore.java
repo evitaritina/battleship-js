@@ -54,7 +54,6 @@ public class GameStore {
                 .findFirst();
     }
 
-
     public void setCellState(Game game, User player, String address, boolean targetArea, CellState state) {
         Optional<Cell> cell = em.createQuery(
                 "select c from Cell c " +

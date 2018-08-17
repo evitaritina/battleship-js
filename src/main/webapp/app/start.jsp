@@ -8,6 +8,7 @@
 <button type="button" onclick="logout()">Log out</button>
 <button type="button" onclick="startGame()">Start Game</button>
 
+
 <script>
     function logout() {
         fetch("<c:url value='/api/auth/logout'/>", {"method": "POST"})

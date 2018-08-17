@@ -17,13 +17,13 @@ public class GameStore {
     @PersistenceContext
     private EntityManager em;
 
-    public Optional<Game> getIncompleteGame() {
-        return em.createQuery(
+    public Optional<Game> getIncompleteGame() {         //meklee vai ir nepabeigtas speles
+        return em.createQuery(                         //meklee speeli ar statusu Incomplete
                 "select g " +
                         "from Game g " +
                         "where g.status = :status", Game.class)
                 .setParameter("status", GameStatus.INCOMPLETE)
-                .setMaxResults(1)
+                .setMaxResults(1)                          //vajag tikai vienu rezultatu
                 .getResultStream()
                 .findFirst();
     }
@@ -54,7 +54,20 @@ public class GameStore {
                 .findFirst();
     }
 
-    public Optional<Cell> findCell(Game game, User player, String address, boolean targetArea) {
+    public Optional<Game> getLatestGame(User user) {       //meklee peedeejo speeli
+        return em.createQuery(
+                "select g " +
+                        "from Game g " +
+                        "where g.player1 = :user " +
+                        "   or g.player2 = :user " +
+                        "order by g.id desc", Game.class)      //lai atrastu tieshi peedeejo speeli
+                .setParameter("user", user)
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst();
+    }
+
+    public Optional<Cell> findCell(Game game, User player, String address, boolean targetArea) {       //meklee ruutinju
         return em.createQuery(
                 "select c from Cell c " +
                         "where c.game = :game " +
@@ -69,7 +82,7 @@ public class GameStore {
                 .findFirst();
     }
 
-    public void setCellState(Game game, User player, String address, boolean targetArea, CellState state) {
+    public void setCellState(Game game, User player, String address, boolean targetArea, CellState state) {      //nosaka ruutinjas staavokli
         Optional<Cell> cell = findCell(game, player, address, targetArea);
         if (cell.isPresent()) {
             cell.get().setState(state);
@@ -84,7 +97,7 @@ public class GameStore {
         }
     }
 
-    public void setShips(Game game, User player, boolean targetArea, List<String> ships) {
+    public void setShips(Game game, User player, boolean targetArea, List<String> ships) {    //izvieto kugus
         clearField(game, player, targetArea);
         ships.stream()
                 .map(addr -> {
@@ -98,7 +111,7 @@ public class GameStore {
                 }).forEach(c -> em.persist(c));
     }
 
-    private void clearField(Game game, User player, boolean targetArea) {
+    private void clearField(Game game, User player, boolean targetArea) {               //notiira ruutinju
         List<Cell> cells = em.createQuery(
                 "select c " +
                         "from Cell c " +
@@ -112,7 +125,7 @@ public class GameStore {
         cells.forEach(c -> em.remove(c));
     }
 
-    public List<Cell> getCells(Game game, User player) {
+    public List<Cell> getCells(Game game, User player) {        //iegust info par rutinju
         return em.createQuery(
                 "select c " +
                         "from Cell c " +

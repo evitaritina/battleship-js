@@ -4,7 +4,7 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
-    <title>Ship Placement</title>
+    <title>Game</title>
     <style>
         table {
             border-collapse: collapse;
@@ -97,6 +97,9 @@
                 window.setTimeout(function () {
                     checkStatus();
                 }, 1000);
+            } else if (game.status === "FINISHED") {
+                location.href = "<c:url value='/app/final.jsp'/>";
+                return;
             } else {
                 return;
             }

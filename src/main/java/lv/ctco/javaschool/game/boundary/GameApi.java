@@ -5,24 +5,25 @@ import lombok.extern.java.Log;
 import lv.ctco.javaschool.auth.control.UserStore;
 import lv.ctco.javaschool.auth.entity.domain.User;
 import lv.ctco.javaschool.game.control.GameStore;
-import lv.ctco.javaschool.game.entity.Game;
-import lv.ctco.javaschool.game.entity.GameDto;
-import lv.ctco.javaschool.game.entity.GameStatus;
+import lv.ctco.javaschool.game.entity.*;
 
 import javax.annotation.security.RolesAllowed;
 import javax.ejb.Stateless;
 import javax.inject.Inject;
 import javax.json.JsonObject;
+import javax.json.JsonString;
 import javax.json.JsonValue;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Path("/game")
 @Stateless
@@ -39,21 +40,43 @@ public class GameApi {
     @RolesAllowed({"ADMIN", "USER"})
     public void startGame() {
         User currentUser = userStore.getCurrentUser();
-        Optional<Game> game = gameStore.getIncompleteGame();
+        Optional<Game> game = gameStore.getIncompleteGame();     //meklee vai ir nepabeigta speele
 
-        game.ifPresent(g -> {
+        game.ifPresent(g -> {               //ir nepabeigta speele
             g.setPlayer2(currentUser);
             g.setStatus(GameStatus.PLACEMENT);
             g.setPlayer1Active(true);
             g.setPlayer2Active(true);
         });
 
-        if (!game.isPresent()) {
+        if (!game.isPresent()) {              //nav nepabigtas speeles
             Game newGame = new Game();
             newGame.setPlayer1(currentUser);
             newGame.setStatus(GameStatus.INCOMPLETE);
             em.persist(newGame);
         }
+    }
+
+    @GET
+    @RolesAllowed({"ADMIN", "USER"})
+    @Path("/cells")
+    public List<CellStateDto> getCells() {
+        User currentUser = userStore.getCurrentUser();
+        Optional<Game> game = gameStore.getStartedGameFor(currentUser, GameStatus.STARTED);
+        return game.map(g -> {
+            List<Cell> cells = gameStore.getCells(g, currentUser);
+            return cells.stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+        }).orElseThrow(IllegalStateException::new);
+    }
+
+    private CellStateDto convertToDto(Cell cell) {
+        CellStateDto dto = new CellStateDto();
+        dto.setTargetArea(cell.isTargetArea());
+        dto.setAddress(cell.getAddress());
+        dto.setState(cell.getState());
+        return dto;
     }
 
     @POST
@@ -68,12 +91,12 @@ public class GameApi {
                 for (Map.Entry<String, JsonValue> pair : field.entrySet()) {
                     log.info(pair.getKey() + " - " + pair.getValue());
                     String addr = pair.getKey();
-                    String value = pair.getValue().toString();
-                    if("SHIP".equals(value)){
+                    String value = ((JsonString) pair.getValue()).getString();
+                    if ("SHIP".equals(value)) {
                         ships.add(addr);
                     }
-                    gameStore.setShips(g, currentUser, false, ships);
                 }
+                gameStore.setShips(g, currentUser, false, ships);
                 g.setPlayerActive(currentUser, false);
                 if (!g.isPlayer1Active() && !g.isPlayer2Active()) {
                     g.setStatus(GameStatus.STARTED);
@@ -83,12 +106,13 @@ public class GameApi {
             }
         });
     }
+
     @GET
     @RolesAllowed({"ADMIN", "USER"})
     @Path("/status")
     public GameDto getGameStatus() {
         User currentUser = userStore.getCurrentUser();
-        Optional<Game> game = gameStore.getOpenGameFor(currentUser);
+        Optional<Game> game = gameStore.getLatestGame(currentUser);
         return game.map(g -> {
             GameDto dto = new GameDto();
             dto.setStatus(g.getStatus());
@@ -96,16 +120,48 @@ public class GameApi {
             return dto;
         }).orElseThrow(IllegalStateException::new);
     }
+
     @POST
     @RolesAllowed({"ADMIN","USER"})
-    @Path("/fire")
-    public void doFire() {
+    @Path("/fire/{address}")
+    public void doFire(@PathParam("address") String address) {
+        log.info("Firing to " + address);
         User currentUser = userStore.getCurrentUser();
         Optional<Game> game = gameStore.getOpenGameFor(currentUser);
         game.ifPresent(g -> {
+            User oppositeUser = g.getOpposite(currentUser);
+            Optional<Cell> enemyCell = gameStore.findCell(g, oppositeUser, address, false);
+
+            if (enemyCell.isPresent()) {
+                Cell c = enemyCell.get();
+                if (c.getState() == CellState.SHIP) {
+                    c.setState(CellState.HIT);
+                    gameStore.setCellState(g, currentUser, address, true, CellState.HIT);
+                    checkFinishState(g, oppositeUser);
+                    return;
+                } else if (c.getState() == CellState.EMPTY) {
+                    c.setState(CellState.MISS);
+                    gameStore.setCellState(g, currentUser, address, true, CellState.MISS);                }
+            } else {
+                gameStore.setCellState(g, oppositeUser, address, false, CellState.MISS);
+                gameStore.setCellState(g, currentUser, address, true, CellState.MISS);
+            }
+
             boolean p1a = g.isPlayer1Active();
             g.setPlayer1Active(!p1a);
             g.setPlayer2Active(p1a);
         });
     }
+
+    private void checkFinishState(Game game, User player) {
+        boolean hasShips = gameStore.getCells(game, player)
+                .stream()
+                .filter(c -> !c.isTargetArea())
+                .anyMatch(c -> c.getState() == CellState.SHIP);
+        if (!hasShips) {
+            game.setStatus(GameStatus.FINISHED);
+        }
+    }
+
+    //private void countFires
 }

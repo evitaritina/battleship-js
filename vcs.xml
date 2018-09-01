@@ -14,6 +14,10 @@
           <option name="url" value="https://github.com/evitaritina/battleship-js" />
           <option name="userName" value="" />
         </UrlAndUserName>
+        <UrlAndUserName>
+          <option name="url" value="https://github.com/ctco-dev/carpooling-2018.git" />
+          <option name="userName" value="" />
+        </UrlAndUserName>
       </list>
     </option>
     <option name="cloneParentDir" value="C:\Users\Administrator\IdeaProjects" />
